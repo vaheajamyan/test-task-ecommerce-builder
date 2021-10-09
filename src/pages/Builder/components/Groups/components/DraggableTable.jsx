@@ -1,35 +1,19 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Table, Space, Button, Col } from 'antd';
+import React, { useCallback, useRef } from 'react';
+import { Table, Button, Switch, InputNumber, Input, Modal } from 'antd';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import update from 'immutability-helper';
-import { DeleteOutlined } from '@ant-design/icons';
+import { DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import UploadImage from './UploadImage';
+import { useDispatch } from 'react-redux';
+import {
+  addNewItem,
+  deleteItem,
+  editItem,
+  reorderItems,
+} from '../../../../../redux/slices/builderSlice';
 
 const type = 'DraggableBodyRow';
-
-const columns = [
-  {
-    title: 'Item Image',
-    dataIndex: 'image',
-  },
-  {
-    title: 'Item Name',
-    dataIndex: 'name',
-  },
-  {
-    title: 'Additional Price (opt)',
-    dataIndex: 'price',
-  },
-  {
-    title: 'In Stock',
-    dataIndex: 'inStock',
-  },
-  {
-    title: 'Action',
-    key: 'action',
-    render: () => <Button icon={<DeleteOutlined />} type="text" />,
-  },
-];
 
 const DraggableBodyRow = ({
   index,
@@ -74,27 +58,112 @@ const DraggableBodyRow = ({
     />
   );
 };
-const DraggableTable = ({ selectionType }) => {
-  const [data, setData] = useState([
+
+const DraggableTable = ({ selectionType, items, groupId, isImagesVisible }) => {
+  const dispatch = useDispatch();
+
+  const columns = [
+    ...(isImagesVisible
+      ? [
+          {
+            title: 'Item Image',
+            width: 50,
+            dataIndex: 'image',
+            render: (image, item) => (
+              <UploadImage
+                image={image}
+                onAddImage={image =>
+                  dispatch(editItem({ groupId, newItem: { ...item, image } }))
+                }
+              />
+            ),
+          },
+        ]
+      : []),
     {
-      key: '1',
-      name: 'John Brown',
-      age: 32,
-      address: 'New York No. 1 Lake Park',
+      title: 'Item Name',
+      dataIndex: 'name',
+      render: (name, item) => (
+        <Input
+          value={name}
+          onChange={e =>
+            dispatch(
+              editItem({
+                groupId,
+                newItem: { ...item, name: e.target.value },
+              }),
+            )
+          }
+        />
+      ),
     },
     {
-      key: '2',
-      name: 'Jim Green',
-      age: 42,
-      address: 'London No. 1 Lake Park',
+      title: 'Additional Price (opt)',
+      dataIndex: 'price',
+      render: (price, item) => (
+        <InputNumber
+          defaultValue={price}
+          min={0}
+          formatter={value =>
+            `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+          }
+          parser={value => value.replace(/\$\s?|(,*)/g, '')}
+          onChange={value =>
+            dispatch(
+              editItem({
+                groupId,
+                newItem: { ...item, price: value },
+              }),
+            )
+          }
+        />
+      ),
     },
     {
-      key: '3',
-      name: 'Joe Black',
-      age: 32,
-      address: 'Sidney No. 1 Lake Park',
+      title: 'In Stock',
+      dataIndex: 'inStock',
+      render: (checked, item) => {
+        return (
+          <Switch
+            checked={checked}
+            onChange={value =>
+              dispatch(
+                editItem({
+                  groupId,
+                  newItem: { ...item, inStock: value },
+                }),
+              )
+            }
+          />
+        );
+      },
     },
-  ]);
+    {
+      title: '',
+      key: 'action',
+      render: item => (
+        <Button
+          icon={<DeleteOutlined />}
+          type="text"
+          onClick={() => {
+            Modal.confirm({
+              title: 'Delete item',
+              okButtonProps: { danger: true },
+              maskClosable: true,
+              content: 'Are you sure you want to delete the item',
+              icon: <ExclamationCircleOutlined style={{ color: 'red' }} />,
+              okText: 'Delete',
+              onOk: () => {
+                dispatch(deleteItem({ groupId, key: item.key }));
+              },
+              cancelText: 'Cancel',
+              centered: true,
+            });
+          }}
+        />
+      ),
+    },
+  ];
 
   const components = {
     body: {
@@ -104,40 +173,57 @@ const DraggableTable = ({ selectionType }) => {
 
   const moveRow = useCallback(
     (dragIndex, hoverIndex) => {
-      const dragRow = data[dragIndex];
-      setData(
-        update(data, {
-          $splice: [
-            [dragIndex, 1],
-            [hoverIndex, 0, dragRow],
-          ],
+      if (!items.length) {
+        return;
+      }
+
+      const dragRow = items[dragIndex];
+      dispatch(
+        reorderItems({
+          groupId,
+          items: update(items, {
+            $splice: [
+              [dragIndex, 1],
+              [hoverIndex, 0, dragRow],
+            ],
+          }),
         }),
       );
     },
-    [data],
+    [items],
   );
+
+  function handleAddItem() {
+    dispatch(addNewItem(groupId));
+  }
 
   const rowSelection = {
     type: selectionType,
     hideSelectAll: true,
-    columnTitle: 'default',
+    columnTitle: 'Default',
     checkStrictly: true,
   };
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <Table
-        rowSelection={rowSelection}
-        columns={columns}
-        dataSource={data}
-        components={components}
-        pagination={false}
-        onRow={(_, index) => ({
-          index,
-          moveRow,
-        })}
-      />
-    </DndProvider>
+    <>
+      <DndProvider backend={HTML5Backend}>
+        <Table
+          style={{ minHeight: 221 }}
+          rowSelection={rowSelection}
+          columns={columns}
+          dataSource={items}
+          components={components}
+          pagination={false}
+          onRow={(_, index) => ({
+            index,
+            moveRow,
+          })}
+        />
+      </DndProvider>
+      <Button type="link" onClick={handleAddItem}>
+        Add New Item
+      </Button>
+    </>
   );
 };
 
