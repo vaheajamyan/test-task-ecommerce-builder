@@ -19,6 +19,7 @@ const StyledLayout = styled(Layout)`
 
 const StyledContent = styled(Content)`
   padding: 24px 48px 0;
+  height: 100%;
 `;
 
 const StyledCard = styled(Card)`
