@@ -69,6 +69,7 @@ function Groups() {
                 )}
               </Draggable>
             ))}
+            {provided.placeholder}
           </div>
         )}
       </Droppable>
